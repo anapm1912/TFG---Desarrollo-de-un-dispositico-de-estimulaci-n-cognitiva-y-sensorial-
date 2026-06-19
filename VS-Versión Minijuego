@@ -1,0 +1,458 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import {
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Pressable,
+} from 'react-native';
+
+type DifficultyLevel = 1 | 2 | 3;
+type SessionEvent = {
+  id: number;
+  timestamp: string;
+  message: string;
+  type: 'up' | 'down' | 'hold' | 'alert';
+};
+
+function getTimestamp() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+}
+
+export default function AdaptiveScreen() {
+  const router = useRouter();
+
+  // --- Datos simulados del sensor (luego vendrán del Arduino/ESP32) ---
+  const [activity, setActivity] = useState(68);
+  const [attention, setAttention] = useState(74);
+  const [responseTime, setResponseTime] = useState(1.8);
+  const [movementQuality, setMovementQuality] = useState(71);
+
+  // --- Estado del sistema adaptativo ---
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>(2);
+  const [sessionEvents, setSessionEvents] = useState<SessionEvent[]>([]);
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [sessionActive, setSessionActive] = useState(true);
+
+  const eventIdRef = useRef(0);
+  const simulationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // --- Añadir evento al registro de sesión ---
+  const addEvent = useCallback(
+    (message: string, type: SessionEvent['type']) => {
+      eventIdRef.current += 1;
+      setSessionEvents((prev) => [
+        { id: eventIdRef.current, timestamp: getTimestamp(), message, type },
+        ...prev.slice(0, 19),
+      ]);
+    },
+    []
+  );
+
+  // --- Motor de IA adaptativa ---
+  const computeDifficulty = useCallback(
+    (
+      act: number,
+      att: number,
+      rt: number,
+      mq: number,
+      current: DifficultyLevel
+    ): { next: DifficultyLevel; reason: string } => {
+      const score =
+        act * 0.3 + att * 0.35 + (100 - rt * 20) * 0.2 + mq * 0.15;
+
+      if (score >= 72) {
+        return {
+          next: 3,
+          reason:
+            'Actividad y atención elevadas. El sistema sube la dificultad para mantener el reto terapéutico.',
+        };
+      } else if (score >= 52) {
+        return {
+          next: 2,
+          reason:
+            'Rendimiento equilibrado. La dificultad se mantiene en nivel medio.',
+        };
+      } else {
+        return {
+          next: 1,
+          reason:
+            'Actividad o atención bajas. El sistema reduce la dificultad para evitar frustración.',
+        };
+      }
+    },
+    []
+  );
+
+  // --- Simulación de datos del sensor (reemplazar por BLE/serial luego) ---
+  useEffect(() => {
+    if (!sessionActive) return;
+
+    simulationRef.current = setInterval(() => {
+      setActivity((prev) => Math.max(20, Math.min(100, prev + Math.floor(Math.random() * 13) - 6)));
+      setAttention((prev) => Math.max(20, Math.min(100, prev + Math.floor(Math.random() * 11) - 5)));
+      setResponseTime((prev) => parseFloat(Math.max(0.5, Math.min(4.0, prev + (Math.random() * 0.4 - 0.2))).toFixed(1)));
+      setMovementQuality((prev) => Math.max(20, Math.min(100, prev + Math.floor(Math.random() * 9) - 4)));
+    }, 2000);
+
+    return () => {
+      if (simulationRef.current) clearInterval(simulationRef.current);
+    };
+  }, [sessionActive]);
+
+  // --- Temporizador de sesión ---
+  useEffect(() => {
+    if (!sessionActive) return;
+
+    sessionTimerRef.current = setInterval(() => {
+      setSessionSeconds((prev) => prev + 1);
+    }, 1000);
+
+    return () => {
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    };
+  }, [sessionActive]);
+
+  // --- Motor IA: recalcular dificultad cuando cambian métricas ---
+  useEffect(() => {
+    if (!sessionActive) return;
+
+    const { next, reason } = computeDifficulty(
+      activity,
+      attention,
+      responseTime,
+      movementQuality,
+      difficulty
+    );
+
+    if (next !== difficulty) {
+      const prevLabel = diffLabel(difficulty);
+      const nextLabel = diffLabel(next);
+      const type = next > difficulty ? 'up' : 'down';
+
+      setDifficulty(next);
+      addEvent(
+        `Dificultad: ${prevLabel} → ${nextLabel}. ${reason}`,
+        type
+      );
+    }
+
+    // Alertas automáticas
+    if (attention < 35) {
+      addEvent('Alerta: Atención muy baja. Considerar pausa.', 'alert');
+    }
+    if (activity < 30) {
+      addEvent('Alerta: Actividad muy baja. Revisar sensor o estado.', 'alert');
+    }
+    if (responseTime > 3.2) {
+      addEvent('Alerta: Tiempo de respuesta alto. Posible fatiga.', 'alert');
+    }
+  }, [activity, attention, responseTime, movementQuality]);
+
+  // --- Control manual de dificultad ---
+  const handleManualDifficulty = (level: DifficultyLevel) => {
+    if (level !== difficulty) {
+      addEvent(
+        `Ajuste manual: dificultad cambiada a ${diffLabel(level)}.`,
+        level > difficulty ? 'up' : 'down'
+      );
+      setDifficulty(level);
+    }
+  };
+
+  const handleStopSession = () => {
+    setSessionActive(false);
+    if (simulationRef.current) clearInterval(simulationRef.current);
+    if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    addEvent('Sesión finalizada manualmente.', 'hold');
+  };
+
+  const formatSessionTime = () => {
+    const m = Math.floor(sessionSeconds / 60).toString().padStart(2, '0');
+    const s = (sessionSeconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.container}>
+        {/* Cabecera */}
+        <View style={styles.topBar}>
+          <View>
+            <Text style={styles.eyebrow}>Control adaptativo</Text>
+            <Text style={styles.title}>Sesión en vivo</Text>
+          </View>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Volver</Text>
+          </Pressable>
+        </View>
+
+        {/* Estado general */}
+        <View style={styles.statusRow}>
+          <View style={[styles.statusBadge, sessionActive ? styles.badgeActive : styles.badgeInactive]}>
+            <Text style={styles.statusBadgeText}>
+              {sessionActive ? '● Sesión activa' : '■ Sesión detenida'}
+            </Text>
+          </View>
+          <Text style={styles.sessionTime}>{formatSessionTime()}</Text>
+        </View>
+
+        {/* Métricas en tiempo real */}
+        <SectionTitle
+          title="Métricas en tiempo real"
+          subtitle="Datos del sensor. Estos valores guiarán la IA para ajustar la dificultad."
+        />
+        <View style={styles.grid}>
+          <MetricCard title="Actividad" value={`${activity}%`} alert={activity < 35} />
+          <MetricCard title="Atención" value={`${attention}%`} alert={attention < 35} />
+          <MetricCard title="T. Respuesta" value={`${responseTime}s`} alert={responseTime > 3.2} />
+          <MetricCard title="Mov. Calidad" value={`${movementQuality}%`} alert={movementQuality < 30} />
+        </View>
+
+        {/* Nivel de dificultad actual */}
+        <SectionTitle
+          title="Dificultad actual"
+          subtitle="Calculada automáticamente por la IA. También puedes ajustarla de forma manual."
+        />
+        <View style={styles.diffCard}>
+          <View style={styles.diffLabelRow}>
+            <Text style={styles.diffValue}>{diffLabel(difficulty)}</Text>
+            <View style={[styles.diffBadge, diffColor(difficulty)]}>
+              <Text style={styles.diffBadgeText}>Nivel {difficulty}/3</Text>
+            </View>
+          </View>
+          <Text style={styles.diffHint}>
+            {difficulty === 1
+              ? 'El juego terapéutico recibirá parámetros de baja exigencia.'
+              : difficulty === 2
+              ? 'El juego terapéutico recibirá parámetros de exigencia media.'
+              : 'El juego terapéutico recibirá parámetros de alta exigencia.'}
+          </Text>
+
+          <View style={styles.manualButtons}>
+            {([1, 2, 3] as DifficultyLevel[]).map((level) => (
+              <Pressable
+                key={level}
+                style={[
+                  styles.manualBtn,
+                  level === difficulty && styles.manualBtnActive,
+                ]}
+                onPress={() => handleManualDifficulty(level)}
+              >
+                <Text
+                  style={[
+                    styles.manualBtnText,
+                    level === difficulty && styles.manualBtnTextActive,
+                  ]}
+                >
+                  {diffLabel(level)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* Control de sesión */}
+        {sessionActive && (
+          <Pressable style={styles.stopButton} onPress={handleStopSession}>
+            <Text style={styles.stopButtonText}>Detener sesión</Text>
+          </Pressable>
+        )}
+
+        {/* Registro de eventos */}
+        <SectionTitle
+          title="Registro de sesión"
+          subtitle="Historial automático de cambios y alertas detectadas por la IA."
+        />
+
+        {sessionEvents.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>
+              Aún no hay eventos registrados. Los cambios de dificultad y alertas aparecerán aquí.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.eventList}>
+            {sessionEvents.map((event) => (
+              <View
+                key={event.id}
+                style={[
+                  styles.eventItem,
+                  event.type === 'up' && styles.eventUp,
+                  event.type === 'down' && styles.eventDown,
+                  event.type === 'alert' && styles.eventAlert,
+                  event.type === 'hold' && styles.eventHold,
+                ]}
+              >
+                <Text style={styles.eventTime}>{event.timestamp}</Text>
+                <Text style={styles.eventMessage}>{event.message}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function diffLabel(level: DifficultyLevel): string {
+  if (level === 1) return 'Baja';
+  if (level === 2) return 'Media';
+  return 'Alta';
+}
+
+function diffColor(level: DifficultyLevel) {
+  if (level === 1) return { backgroundColor: '#d4dfcc' };
+  if (level === 2) return { backgroundColor: '#e9e0c6' };
+  return { backgroundColor: '#cedcd8' };
+}
+
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+    </View>
+  );
+}
+
+function MetricCard({
+  title,
+  value,
+  alert,
+}: {
+  title: string;
+  value: string;
+  alert?: boolean;
+}) {
+  return (
+    <View style={[styles.metricCard, alert && styles.metricCardAlert]}>
+      <Text style={styles.metricTitle}>{title}</Text>
+      <Text style={[styles.metricValue, alert && styles.metricValueAlert]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#f7f6f2' },
+  container: { padding: 20, paddingBottom: 48, gap: 18 },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  eyebrow: { fontSize: 13, color: '#6f6d67', fontWeight: '600', marginBottom: 6 },
+  title: { fontSize: 30, fontWeight: '800', color: '#1f1c17' },
+  backButton: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d5cfc7',
+  },
+  backButtonText: { color: '#1f1c17', fontSize: 15, fontWeight: '700' },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  badgeActive: { backgroundColor: '#d4dfcc' },
+  badgeInactive: { backgroundColor: '#e0dbd4' },
+  statusBadgeText: { fontSize: 14, fontWeight: '700', color: '#1f1c17' },
+  sessionTime: { fontSize: 22, fontWeight: '800', color: '#0d3f43' },
+  sectionHeader: { gap: 6 },
+  sectionTitle: { fontSize: 22, fontWeight: '800', color: '#1f1c17' },
+  sectionSubtitle: { fontSize: 14, color: '#69665f', lineHeight: 20 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  metricCard: {
+    flexGrow: 1,
+    minWidth: 160,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e0dbd4',
+  },
+  metricCardAlert: { borderColor: '#ebc5ce', backgroundColor: '#fdeff2' },
+  metricTitle: { fontSize: 13, color: '#6d695f', marginBottom: 10, fontWeight: '600' },
+  metricValue: { fontSize: 26, fontWeight: '800', color: '#221f19' },
+  metricValueAlert: { color: '#a12c7b' },
+  diffCard: {
+    backgroundColor: '#f9f8f5',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#ddd8d0',
+    gap: 14,
+  },
+  diffLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  diffValue: { fontSize: 34, fontWeight: '800', color: '#0d3f43' },
+  diffBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999 },
+  diffBadgeText: { fontSize: 14, fontWeight: '700', color: '#1f1c17' },
+  diffHint: { fontSize: 15, color: '#5c5953', lineHeight: 22 },
+  manualButtons: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  manualBtn: {
+    flex: 1,
+    minWidth: 90,
+    minHeight: 44,
+    paddingVertical: 12,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d5cfc7',
+  },
+  manualBtnActive: {
+    backgroundColor: '#01696f',
+    borderColor: '#01696f',
+  },
+  manualBtnText: { fontSize: 15, fontWeight: '700', color: '#1f1c17' },
+  manualBtnTextActive: { color: '#ffffff' },
+  stopButton: {
+    minHeight: 44,
+    paddingVertical: 14,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#a13544',
+  },
+  stopButtonText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  emptyState: {
+    backgroundColor: '#f9f8f5',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e0dbd4',
+  },
+  emptyStateText: { fontSize: 15, color: '#6b675f', lineHeight: 22 },
+  eventList: { gap: 10 },
+  eventItem: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    gap: 4,
+  },
+  eventUp: { backgroundColor: '#eef7ee', borderColor: '#cfe3d0' },
+  eventDown: { backgroundColor: '#fff6ea', borderColor: '#efd6ac' },
+  eventAlert: { backgroundColor: '#fdeff2', borderColor: '#ebc5ce' },
+  eventHold: { backgroundColor: '#f3f0ec', borderColor: '#dcd9d5' },
+  eventTime: { fontSize: 12, fontWeight: '700', color: '#7a7974' },
+  eventMessage: { fontSize: 15, color: '#2b2722', lineHeight: 22 },
+});
