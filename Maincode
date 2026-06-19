@@ -1,0 +1,122 @@
+// C++ code
+//
+int ALEATORIO1 = 0;
+
+int ALEATORIO2 = 0;
+
+int ALEATORIO3 = 0;
+// Pines de componentes (Ordenados de izquierda a derecha según tu circuito)
+const int leds[] = {2, 3, 4, 5};         // Verde (2), Azul (3), Rojo (4), Amarillo (5)
+const int botones[] = {9, 8, 7, 6};      // Verde (9), Azul (8), Rojo (7), Amarillo (6)
+const int zumbador = 10;                 // Buzzer en pin 10
+
+// Frecuencias de sonido para cada color (De izquierda a derecha)
+const int tonos[] = {92, 165, 294, 523}; // Verde (F#2), Azul (E3), Rojo (D4), Amarillo (C5)
+
+// Variables del juego (Secuencia de 4 pasos)
+int secuenciaAleatoria[4] = {0, 0, 0, 0};
+int secuenciaUsuario[4] = {0, 0, 0, 0};
+int pasoActual = 0; // Cuenta cuántos botones ha presionado el jugador en el turno
+
+void setup() {
+  Serial.begin(9600);
+  
+  // Configurar LEDs como salidas y botones como entradas
+  for (int i = 0; i < 4; i++) {
+    pinMode(leds[i], OUTPUT);
+    pinMode(botones[i], INPUT);
+  }
+  
+  pinMode(zumbador, OUTPUT);
+  
+  // Inicializar semilla aleatoria usando el pin analógico A0 que está libre
+  randomSeed(analogRead(A0)); 
+}
+
+void loop() {
+  // 1. GENERAR Y MOSTRAR LA SECUENCIA ALEATORIA
+  if (secuenciaAleatoria[0] == 0) {
+    delay(1000);
+    pasoActual = 0;
+    
+    Serial.println("--- NUEVA SECUENCIA ---");
+    for (int i = 0; i < 4; i++) {
+      // Elige un índice aleatorio entre 0 y 3 (que corresponde a los 4 colores)
+      int indiceAleatorio = random(0, 4); 
+      secuenciaAleatoria[i] = leds[indiceAleatorio]; // Guarda el pin del LED (2, 3, 4 o 5)
+      
+      // Mostrar el LED de la secuencia con su sonido correspondiente
+      digitalWrite(secuenciaAleatoria[i], HIGH);
+      tone(zumbador, tonos[indiceAleatorio], 400);
+      delay(600);
+      digitalWrite(secuenciaAleatoria[i], LOW);
+      delay(300);
+    }
+  }
+
+  // 2. LEER LAS PULSACIONES DEL USUARIO
+  for (int i = 0; i < 4; i++) {
+    if (digitalRead(botones[i]) == HIGH) {
+      
+      // Encender el LED que está justo arriba del botón presionado y sonar su nota
+      digitalWrite(leds[i], HIGH);
+      tone(zumbador, tonos[i], 300);
+      
+      // Registrar el pin del LED que el usuario acaba de presionar
+      secuenciaUsuario[pasoActual] = leds[i];
+      
+      Serial.print("Boton pulsado. Paso ");
+      Serial.print(pasoActual + 1);
+      Serial.print(" -> LED Pin: ");
+      Serial.println(leds[i]);
+      
+      // --- ANTIRREBOTE CRÍTICO ---
+      // Se queda aquí bloqueado MIENTRAS mantengas el botón hundido.
+      // Así evitamos que un solo clic llene múltiples pasos.
+      while (digitalRead(botones[i]) == HIGH) {
+        delay(10); 
+      }
+      
+      digitalWrite(leds[i], LOW); // Apagar el LED cuando el usuario suelta el botón
+      pasoActual++;               // Avanzar al siguiente paso del jugador
+      delay(100);                 // Pequeña pausa de estabilidad
+    }
+  }
+
+  // 3. EVALUAR SI EL JUGADOR GANÓ O PERDIÓ
+  if (pasoActual == 4) {
+    bool gano = true;
+    
+    // Comparar lo que hizo el usuario con lo que generó la máquina
+    for (int i = 0; i < 4; i++) {
+      if (secuenciaAleatoria[i] != secuenciaUsuario[i]) {
+        gano = false;
+        break; // Al primer fallo, se marca como derrota
+      }
+    }
+    
+    if (gano) {
+      Serial.println("¡GANASTE EL JUEGO!");
+      tone(zumbador, 5274, 800); // Tono agudo de victoria
+      
+      // Efecto visual de victoria: Destellar todos los LEDs juntos
+      for (int r = 0; r < 3; r++) {
+        for (int i = 0; i < 4; i++) digitalWrite(leds[i], HIGH);
+        delay(200);
+        for (int i = 0; i < 4; i++) digitalWrite(leds[i], LOW);
+        delay(200);
+      }
+    } else {
+      Serial.println("PERDISTE. Intenta de nuevo.");
+      tone(zumbador, 39, 1200); // Tono grave de derrota
+      delay(1200);
+    }
+    
+    // 4. REINICIAR LAS MATRICES PARA LA PRÓXIMA RONDA
+    for (int i = 0; i < 4; i++) {
+      secuenciaAleatoria[i] = 0;
+      secuenciaUsuario[i] = 0;
+    }
+    pasoActual = 0;
+  }
+}
