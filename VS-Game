@@ -1,0 +1,287 @@
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import {
+    Pressable,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
+
+
+export default function GameScreen() {
+  const router = useRouter();
+  const [activity, setActivity] = useState(62);
+  const [score, setScore] = useState(12);
+  const [difficulty, setDifficulty] = useState(2);
+
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActivity((prev) => {
+        const change = Math.floor(Math.random() * 21) - 10;
+        const next = Math.max(20, Math.min(100, prev + change));
+        return next;
+      });
+
+
+      setScore((prev) => prev + 1);
+    }, 1500);
+
+
+    return () => clearInterval(interval);
+  }, []);
+
+
+  useEffect(() => {
+    if (activity >= 75) {
+      setDifficulty(3);
+    } else if (activity >= 45) {
+      setDifficulty(2);
+    } else {
+      setDifficulty(1);
+    }
+  }, [activity]);
+
+
+  const difficultyLabel = useMemo(() => {
+    if (difficulty === 1) return 'Baja';
+    if (difficulty === 2) return 'Media';
+    return 'Alta';
+  }, [difficulty]);
+
+
+  const targetSpeed = useMemo(() => {
+    if (difficulty === 1) return 'Lenta';
+    if (difficulty === 2) return 'Media';
+    return 'Alta';
+  }, [difficulty]);
+
+
+  const helperText = useMemo(() => {
+    if (difficulty === 1) {
+      return 'El juego reduce la exigencia para evitar frustración o fatiga.';
+    }
+    if (difficulty === 2) {
+      return 'El juego mantiene una exigencia equilibrada.';
+    }
+    return 'El juego aumenta el reto porque detecta buena actividad.';
+  }, [difficulty]);
+
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.container}>
+        <View style={styles.topBar}>
+          <View>
+            <Text style={styles.eyebrow}>Juego adaptativo</Text>
+            <Text style={styles.title}>Sesión activa</Text>
+          </View>
+
+
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Volver</Text>
+          </Pressable>
+        </View>
+
+
+        <View style={styles.mainCard}>
+          <Text style={styles.mainLabel}>Estado del juego</Text>
+          <Text style={styles.mainValue}>Puntuación: {score}</Text>
+          <Text style={styles.mainDescription}>
+            Esta pantalla simula un minijuego terapéutico cuya dificultad cambia
+            en función de la actividad detectada.
+          </Text>
+        </View>
+
+
+        <View style={styles.grid}>
+          <InfoCard title="Actividad detectada" value={`${activity}%`} />
+          <InfoCard title="Dificultad" value={difficultyLabel} />
+          <InfoCard title="Velocidad objetivo" value={targetSpeed} />
+        </View>
+
+
+        <View style={styles.feedbackCard}>
+          <Text style={styles.feedbackTitle}>Adaptación automática</Text>
+          <Text style={styles.feedbackText}>{helperText}</Text>
+        </View>
+
+
+        <View style={styles.playArea}>
+          <Text style={styles.playAreaTitle}>Área de juego</Text>
+          <View style={styles.target}>
+            <Text style={styles.targetText}>Objetivo</Text>
+          </View>
+          <Text style={styles.playHint}>
+            Más adelante aquí podrás poner tu juego real conectado a los datos
+            del Arduino o ESP32.
+          </Text>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+
+function InfoCard({ title, value }: { title: string; value: string }) {
+  return (
+    <View style={styles.infoCard}>
+      <Text style={styles.infoTitle}>{title}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+}
+
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#f7f6f2',
+  },
+  container: {
+    flex: 1,
+    padding: 20,
+    gap: 18,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  eyebrow: {
+    fontSize: 13,
+    color: '#6f6d67',
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#1f1c17',
+  },
+  backButton: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d5cfc7',
+  },
+  backButtonText: {
+    color: '#1f1c17',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  mainCard: {
+    backgroundColor: '#f9f8f5',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#ddd8d0',
+    gap: 10,
+  },
+  mainLabel: {
+    fontSize: 14,
+    color: '#6f6d67',
+    fontWeight: '600',
+  },
+  mainValue: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#0d3f43',
+  },
+  mainDescription: {
+    fontSize: 16,
+    color: '#5c5953',
+    lineHeight: 24,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  infoCard: {
+    flexGrow: 1,
+    minWidth: 220,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e0dbd4',
+  },
+  infoTitle: {
+    fontSize: 14,
+    color: '#6d695f',
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  infoValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#221f19',
+  },
+  feedbackCard: {
+    backgroundColor: '#eef6f6',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#cfe0e0',
+    gap: 8,
+  },
+  feedbackTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#123f44',
+  },
+  feedbackText: {
+    fontSize: 15,
+    color: '#35575b',
+    lineHeight: 22,
+  },
+  playArea: {
+    flex: 1,
+    minHeight: 260,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e0dbd4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  playAreaTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1f1c17',
+  },
+  target: {
+    width: 140,
+    height: 140,
+    borderRadius: 999,
+    backgroundColor: '#01696f',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+  targetText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  playHint: {
+    fontSize: 15,
+    color: '#67635d',
+    lineHeight: 22,
+    textAlign: 'center',
+    maxWidth: 500,
+  },
+});
