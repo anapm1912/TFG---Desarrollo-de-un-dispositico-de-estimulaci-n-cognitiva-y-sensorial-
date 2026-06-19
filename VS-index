@@ -1,0 +1,375 @@
+import { useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import {
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+
+type AlertLevel = 'ok' | 'warning' | 'danger';
+
+
+export default function Index() {
+  const router = useRouter();
+  const [connected, setConnected] = useState(false);
+  const [difficulty] = useState(2);
+
+
+  const patient = {
+    name: 'Paciente A',
+    session: 'Sesión 04',
+    adherence: 82,
+  };
+
+
+  const liveData = {
+    activity: 68,
+    attention: 74,
+    responseTime: 1.8,
+    movementQuality: 71,
+  };
+
+
+  const alerts = useMemo(() => {
+    const items: { label: string; level: AlertLevel }[] = [];
+
+
+    if (liveData.activity < 40) {
+      items.push({ label: 'Actividad baja detectada', level: 'warning' });
+    }
+    if (liveData.responseTime > 2.5) {
+      items.push({ label: 'Tiempo de respuesta alto', level: 'warning' });
+    }
+    if (liveData.attention < 50) {
+      items.push({ label: 'Atención en descenso', level: 'danger' });
+    }
+    if (items.length === 0) {
+      items.push({ label: 'Sin alertas activas', level: 'ok' });
+    }
+
+
+    return items;
+  }, [liveData.activity, liveData.attention, liveData.responseTime]);
+
+
+  const levelLabel =
+    difficulty === 1 ? 'Bajo' : difficulty === 2 ? 'Medio' : 'Alto';
+
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.hero}>
+          <View style={styles.heroTextBlock}>
+            <Text style={styles.eyebrow}>Rehabilitación cognitiva</Text>
+            <Text style={styles.title}>Panel terapéutico</Text>
+            <Text style={styles.subtitle}>
+              Interfaz base para conectar el juego con la actividad del paciente
+              y adaptar la dificultad en tiempo real.
+            </Text>
+          </View>
+
+
+          <View style={styles.heroActions}>
+            <Pressable
+              style={[
+                styles.connectionButton,
+                connected ? styles.connectedButton : styles.disconnectedButton,
+              ]}
+              onPress={() => setConnected((prev) => !prev)}
+            >
+              <Text style={styles.connectionButtonText}>
+                {connected ? 'Dispositivo conectado' : 'Conectar dispositivo'}
+              </Text>
+            </Pressable>
+
+
+            <Pressable
+              style={styles.gameButton}
+              onPress={() => router.push('/game')}
+            >
+              <Text style={styles.gameButtonText}>Ir al juego</Text>
+            </Pressable>
+          </View>
+        </View>
+
+
+        <View style={styles.grid}>
+          <Card>
+            <Text style={styles.cardLabel}>Paciente</Text>
+            <Text style={styles.cardValue}>{patient.name}</Text>
+            <Text style={styles.cardHint}>{patient.session}</Text>
+          </Card>
+
+
+          <Card>
+            <Text style={styles.cardLabel}>Adherencia</Text>
+            <Text style={styles.cardValue}>{patient.adherence}%</Text>
+            <Text style={styles.cardHint}>Participación semanal</Text>
+          </Card>
+
+
+          <Card>
+            <Text style={styles.cardLabel}>Nivel actual</Text>
+            <Text style={styles.cardValue}>{levelLabel}</Text>
+            <Text style={styles.cardHint}>Dificultad adaptativa</Text>
+          </Card>
+
+
+          <Card>
+            <Text style={styles.cardLabel}>Estado</Text>
+            <Text style={styles.cardValue}>
+              {connected ? 'Activo' : 'En espera'}
+            </Text>
+            <Text style={styles.cardHint}>Conexión con sensor</Text>
+          </Card>
+        </View>
+
+
+        <SectionTitle
+          title="Datos en tiempo real"
+          subtitle="Variables que luego llegarán desde Arduino o ESP32."
+        />
+
+
+        <View style={styles.grid}>
+          <MetricCard title="Actividad" value={`${liveData.activity}%`} />
+          <MetricCard title="Atención" value={`${liveData.attention}%`} />
+          <MetricCard
+            title="Tiempo de respuesta"
+            value={`${liveData.responseTime}s`}
+          />
+          <MetricCard
+            title="Calidad de movimiento"
+            value={`${liveData.movementQuality}%`}
+          />
+        </View>
+
+
+        <SectionTitle
+          title="Alertas"
+          subtitle="Mensajes de seguimiento clínico o de juego."
+        />
+
+
+        <View style={styles.alertList}>
+          {alerts.map((alert, index) => (
+            <View
+              key={`${alert.label}-${index}`}
+              style={[
+                styles.alertItem,
+                alert.level === 'ok' && styles.alertOk,
+                alert.level === 'warning' && styles.alertWarning,
+                alert.level === 'danger' && styles.alertDanger,
+              ]}
+            >
+              <Text style={styles.alertText}>{alert.label}</Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+
+function Card({ children }: { children: React.ReactNode }) {
+  return <View style={styles.card}>{children}</View>;
+}
+
+
+function MetricCard({ title, value }: { title: string; value: string }) {
+  return (
+    <View style={styles.metricCard}>
+      <Text style={styles.metricTitle}>{title}</Text>
+      <Text style={styles.metricValue}>{value}</Text>
+    </View>
+  );
+}
+
+
+function SectionTitle({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+    </View>
+  );
+}
+
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#f7f6f2',
+  },
+  container: {
+    padding: 20,
+    paddingBottom: 40,
+    gap: 18,
+  },
+  hero: {
+    backgroundColor: '#f9f8f5',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#ddd8d0',
+    gap: 18,
+  },
+  heroTextBlock: {
+    gap: 8,
+  },
+  heroActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  eyebrow: {
+    fontSize: 13,
+    color: '#6f6d67',
+    fontWeight: '600',
+  },
+  title: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#1f1c17',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#5c5953',
+    lineHeight: 24,
+    maxWidth: 720,
+  },
+  connectionButton: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    justifyContent: 'center',
+  },
+  connectedButton: {
+    backgroundColor: '#2f6a39',
+  },
+  disconnectedButton: {
+    backgroundColor: '#01696f',
+  },
+  connectionButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  gameButton: {
+    minHeight: 44,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d5cfc7',
+  },
+  gameButtonText: {
+    color: '#1f1c17',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  card: {
+    flexGrow: 1,
+    minWidth: 220,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e0dbd4',
+  },
+  cardLabel: {
+    fontSize: 13,
+    color: '#75726b',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  cardValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#221f19',
+  },
+  cardHint: {
+    fontSize: 14,
+    color: '#6b675f',
+    marginTop: 6,
+  },
+  sectionHeader: {
+    marginTop: 6,
+    gap: 6,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1f1c17',
+  },
+  sectionSubtitle: {
+    fontSize: 15,
+    color: '#69665f',
+    lineHeight: 22,
+  },
+  metricCard: {
+    flexGrow: 1,
+    minWidth: 220,
+    backgroundColor: '#fdfcf9',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e6e0d8',
+  },
+  metricTitle: {
+    fontSize: 14,
+    color: '#6d695f',
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  metricValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0d3f43',
+  },
+  alertList: {
+    gap: 10,
+  },
+  alertItem: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+  },
+  alertOk: {
+    backgroundColor: '#eef7ee',
+    borderColor: '#cfe3d0',
+  },
+  alertWarning: {
+    backgroundColor: '#fff6ea',
+    borderColor: '#efd6ac',
+  },
+  alertDanger: {
+    backgroundColor: '#fdeff2',
+    borderColor: '#ebc5ce',
+  },
+  alertText: {
+    fontSize: 15,
+    color: '#2b2722',
+    fontWeight: '600',
+  },
+});
