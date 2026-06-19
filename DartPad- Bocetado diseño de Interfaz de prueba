@@ -1,0 +1,376 @@
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const ArduinoDashboardApp());
+}
+
+class ArduinoDashboardApp extends StatelessWidget {
+  const ArduinoDashboardApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Arduino Dashboard',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF01696F),
+          brightness: Brightness.light,
+        ),
+      ),
+      home: const DashboardPage(),
+    );
+  }
+}
+
+class SensorData {
+  final double temperatura;
+  final double humedad;
+  final double voltaje;
+  final DateTime hora;
+
+  SensorData({
+    required this.temperatura,
+    required this.humedad,
+    required this.voltaje,
+    required this.hora,
+  });
+}
+
+class DashboardPage extends StatefulWidget {
+  const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  final Random random = Random();
+  final List<SensorData> historial = [];
+  Timer? timer;
+
+  bool conectado = false;
+  double temperatura = 24.5;
+  double humedad = 55.0;
+  double voltaje = 4.9;
+  int currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _addSample();
+  }
+
+  void _toggleConexion() {
+    setState(() {
+      conectado = !conectado;
+    });
+
+    if (conectado) {
+      timer = Timer.periodic(const Duration(seconds: 2), (_) {
+        _addSample();
+      });
+    } else {
+      timer?.cancel();
+    }
+  }
+
+  void _addSample() {
+    setState(() {
+      temperatura = 22 + random.nextDouble() * 10;
+      humedad = 40 + random.nextDouble() * 35;
+      voltaje = 4.5 + random.nextDouble() * 0.7;
+
+      historial.insert(
+        0,
+        SensorData(
+          temperatura: temperatura,
+          humedad: humedad,
+          voltaje: voltaje,
+          hora: DateTime.now(),
+        ),
+      );
+
+      if (historial.length > 12) {
+        historial.removeLast();
+      }
+    });
+  }
+
+  List<String> get alertas {
+    final List<String> items = [];
+    if (temperatura > 30) {
+      items.add('Temperatura alta detectada');
+    }
+    if (humedad < 45) {
+      items.add('Humedad baja');
+    }
+    if (voltaje < 4.7) {
+      items.add('Voltaje por debajo del rango recomendado');
+    }
+    if (items.isEmpty) {
+      items.add('Sin alertas activas');
+    }
+    return items;
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = [_buildInicio(), _buildHistorial(), _buildAjustes()];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Monitor Arduino'),
+        centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton.tonal(
+              onPressed: _toggleConexion,
+              child: Text(conectado ? 'Desconectar' : 'Conectar'),
+            ),
+          ),
+        ],
+      ),
+      body: pages[currentIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: (value) {
+          setState(() {
+            currentIndex = value;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Inicio',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Histórico',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Ajustes',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInicio() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _statusCard(),
+        const SizedBox(height: 16),
+        const Text(
+          'Resumen general',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            metricCard(
+              'Temperatura',
+              '${temperatura.toStringAsFixed(1)} °C',
+              Icons.thermostat,
+            ),
+            metricCard(
+              'Humedad',
+              '${humedad.toStringAsFixed(1)} %',
+              Icons.water_drop,
+            ),
+            metricCard(
+              'Voltaje',
+              '${voltaje.toStringAsFixed(2)} V',
+              Icons.bolt,
+            ),
+            metricCard(
+              'Estado',
+              conectado ? 'Activo' : 'Desconectado',
+              Icons.sensors,
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          'Alertas',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        ...alertas.map(
+          (a) => Card(
+            child: ListTile(
+              leading: Icon(
+                a == 'Sin alertas activas'
+                    ? Icons.check_circle
+                    : Icons.warning_amber,
+                color: a == 'Sin alertas activas'
+                    ? Colors.green
+                    : Colors.orange,
+              ),
+              title: Text(a),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          'Datos en tiempo real',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              conectado
+                  ? 'Recibiendo valores simulados cada 2 segundos.'
+                  : 'Pulsa "Conectar" para iniciar la simulación de datos.',
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHistorial() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Histórico de medidas',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        if (historial.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Todavía no hay datos registrados.'),
+            ),
+          ),
+        ...historial.map(
+          (item) => Card(
+            child: ListTile(
+              title: Text(
+                '${item.temperatura.toStringAsFixed(1)} °C · ${item.humedad.toStringAsFixed(1)} % · ${item.voltaje.toStringAsFixed(2)} V',
+              ),
+              subtitle: Text(
+                '${item.hora.hour.toString().padLeft(2, '0')}:${item.hora.minute.toString().padLeft(2, '0')}:${item.hora.second.toString().padLeft(2, '0')}',
+              ),
+              leading: const Icon(Icons.query_stats),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAjustes() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: const [
+        Text(
+          'Ajustes de conexión',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.memory),
+            title: Text('Dispositivo esperado'),
+            subtitle: Text('ESP32 / Arduino BLE o envío por serie/Wi-Fi'),
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.code),
+            title: Text('Formato recomendado'),
+            subtitle: Text('JSON: {"temp":24.5,"hum":56.2,"volt":4.91}'),
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('Modo DartPad'),
+            subtitle: Text(
+              'Esta versión muestra solo la interfaz y datos simulados.',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statusCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              conectado ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+              size: 32,
+              color: conectado ? Colors.teal : Colors.grey,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                conectado ? 'Sistema conectado' : 'Sistema desconectado',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget metricCard(String title, String value, IconData icon) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 28),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 14, color: Colors.black54),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
