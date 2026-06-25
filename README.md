@@ -13,4 +13,4 @@ Este repositorio contiene el código fuente, los bocetos de interfaces y los ent
 *   **Prototipado de interfaz:** DartPad (Flutter).
 
 ## 👤 Autor
-* **Ana P. M.** - Estudiante de Grado
+* **AnaM P. M.** - Estudiante de Grado en Ingeniería Biomédica
